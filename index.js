@@ -128,6 +128,104 @@ function extractValidJson(inputString) {
     }
 }
 
+
+function createOptions(databaseSchemaString) {
+    return {
+        tools: [
+            {
+                "type": "function",
+                "function": {
+                    "name": "ask_database",
+                    "description": "Use this function to answer user questions about music. Input should be a fully formed SQL query.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": `SQL query extracting info to answer the user's question. SQL should be written using this database schema: ${databaseSchemaString} The query should be returned in plain text, not in JSON.`
+                            }
+                        },
+                        "required": ["query"],
+                    }
+                }
+            }
+        ]
+    }
+}
+
+async function ask_database(query) {
+// """Function to query SQLite database with a provided SQL query."""
+    console.log('query')
+    console.log(query)
+    try {
+        const results = await sql.query(query);
+        console.log('results')
+        console.log(results)
+        return results
+    } catch (e) {
+        console.log('results')
+        const results = e
+        console.log(results)
+        return results
+    }
+}
+
+async function applyToolCall({function: call, id}, databasesTablesColumns) {
+    if (call.name === "ask_database") {
+        const {query} = JSON.parse(call.arguments);
+        // In a real application, this would be a call to a weather API with location and unit parameters
+        const databaseResult = await ask_database(query)
+
+        return {
+            role: "tool",
+            content: `The result from running the SQL query you generated is: .` + databaseResult,
+            toolCallId: id,
+        }
+    }
+    throw new Error(`Unknown tool call: ${call.name}`);
+}
+
+
+async function getChatGptAnswerObjectWithFunction(messages, databasesTablesColumns) {
+    // it assumes you're using 0613 version of the openai api
+    console.log('beore chat_response')
+    console.log(messages)
+    try {
+
+        const chat_response = await openAIClient.getChatCompletions(deploymentId, messages, createOptions(databasesTablesColumns))
+
+        console.log('after chart_response')
+        // Extract the generated completion from the OpenAI API response.
+        const choice = chat_response.choices[0];
+        const responseMessage = choice.message;
+        if (responseMessage?.role === "assistant") {
+            const requestedToolCalls = responseMessage?.toolCalls;
+            if (requestedToolCalls?.length) {
+                try {
+                    const toolCallResolutionMessages = [
+                        ...messages,
+                        responseMessage,
+                        ...requestedToolCalls.map(await applyToolCall)
+                    ];
+                    const result = await openAIClient.getChatCompletions(deploymentId, toolCallResolutionMessages);
+                    // continue handling the response as normal
+                    messages.push(result.choices[0]);
+                    // console.log(messages)
+                    return messages
+                } catch (e) {
+                    console.log('e2')
+                    console.log(e)
+                }
+            }
+        }
+        // return responseMessage;
+    } catch (e) {
+        console.log('error1')
+        console.log(e)
+    }
+}
+
+
 async function getChatGptAnswerObject(messages) {
     let messageHistory = messages;
     console.log('running the method');
@@ -135,7 +233,7 @@ async function getChatGptAnswerObject(messages) {
 
     while (true) {
         try {
-            const result = await openAIClient.getChatCompletions(deploymentId, messages);
+            const result = await openAIClient.getChatCompletions(deploymentId, messages, options);
             // console.log(result.choices[0].message.content)
             const validJson = extractValidJson(result.choices[0].message.content);
             // console.log(validJson)
@@ -266,26 +364,34 @@ let startMessageStack = [
     },
     {
         "role": "system",
-        "content": "From now you will only ever respond with JSON. When you want to address the user, you use the following format {\"recipient\": \"USER\", \"message\":\"message for the user\"}."
+        "content": "Answer user questions by generating SQL queries against the provided database schema."
     },
+    // {
+    //     "role": "system",
+    //     "content": "From now you will only ever respond with JSON. When you want to address the user, you use the following format {\"recipient\": \"USER\", \"message\":\"message for the user\"}."
+    // },
     // {"role": "assistant", "content": "{\"recipient\": \"USER\", \"message\":\"I understand.\"}."},
+    // {
+    //     "role": "system",
+    //     "content": "You can address the SQL Server by using the SERVER recipient. When calling the server, you must also specify an action. The action can be QUERY when you want to QUERY the database. The format you will use for executing a query is as follows: {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
+    // },
+    // {
+    //     "role": "system",
+    //     "content": "if you need to query the database to answer information you're supposed to write the query in the message part of the JSON as specified earlier and repeated here {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
+    // },
+    // {
+    //     "role": "system",
+    //     "content": "you cannot tell the user to execute a query, you must do it yourself by sending a message to the server. like this {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
+    // }, {
+    //     "role": "system",
+    //     "content": "you will not tell that the answer is a query for the user such as 'The query for the number of venues is: SELECT COUNT(*) FROM test.dbo.Venues;', you must do it yourself by sending a message to the server like this {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
+    // }, {
+    //     "role": "system",
+    //     "content": "you will not tell that the answer is a query for the user such as  'The number of venues we have is: SELECT COUNT(*) FROM test.dbo.Venues;', you must do it yourself by sending a message to the server like this {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
+    // },
     {
-        "role": "system",
-        "content": "You can address the SQL Server by using the SERVER recipient. When calling the server, you must also specify an action. The action can be QUERY when you want to QUERY the database. The format you will use for executing a query is as follows: {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
-    },
-    {
-        "role": "system",
-        "content": "if you need to query the database to answer information you're supposed to write the query in the message part of the JSON as specified earlier and repeated here {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
-    },
-    {
-        "role": "system",
-        "content": "you cannot tell the user to execute a query, you must do it yourself by sending a message to the server. like this {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
-    }, {
-        "role": "system",
-        "content": "you will not tell that the answer is a query for the user such as 'The query for the number of venues is: SELECT COUNT(*) FROM test.dbo.Venues;', you must do it yourself by sending a message to the server like this {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
-    }, {
-        "role": "system",
-        "content": "you will not tell that the answer is a query for the user such as  'The number of venues we have is: SELECT COUNT(*) FROM test.dbo.Venues;', you must do it yourself by sending a message to the server like this {\"recipient\":\"SERVER\", \"action\":\"QUERY\", \"message\":\"SELECT SUM(OrderQty) FROM Sales.SalesOrderDetail;\"}"
+        "role": "user",
+        "content": "how many venues do we have?"
     },
 
 ]
@@ -296,12 +402,12 @@ app.post('/allDbsAndSchemas', async (req, res) => {
         return
     }
 
-    const userQuery = req.body.userQuery
-    if (!userQuery) {
-        console.log('no user query')
-        res.status(400).send('No user query')
-        return
-    }
+    // const userQuery = req.body.userQuery
+    // if (!userQuery) {
+    //     console.log('no user query')
+    //     res.status(400).send('No user query')
+    //     return
+    // }
 
     const sqlDatabasesAvailable = await sql.query`SELECT name FROM master.sys.databases`;
     const databaseList = sqlDatabasesAvailable.recordset
@@ -372,10 +478,12 @@ app.post('/allDbsAndSchemas', async (req, res) => {
         "content": "here is the json with all databases, tables and columns with data types: " + JSON.stringify(databasesTablesColumns)
     })
 
-    messageHistory.push(userQuery)
+    // messageHistory.push(userQuery)
     let getUpdatedMessageHistory;
+    console.log('before try')
     try {
-        getUpdatedMessageHistory = await getChatGptAnswerObject(messageHistory);
+        // getUpdatedMessageHistory = await getChatGptAnswerObject(messageHistory);
+        getUpdatedMessageHistory = await getChatGptAnswerObjectWithFunction(messageHistory, databasesTablesColumns);
     } catch (e) {
         console.log("send status 2")
         console.log(e)
@@ -389,7 +497,6 @@ app.post('/allDbsAndSchemas', async (req, res) => {
         return res.send(JSON.safeStringify(getUpdatedMessageHistory))
     } else return res.status(500).send('Something went wrong')
 });
-
 
 
 // Catch all requests
