@@ -185,6 +185,8 @@ async function getChatGptAnswerObjectWithFunction(messages, databasesTablesColum
                     ];
 
                     const result = await openAIClient.getChatCompletions(deploymentId, toolCallResolutionMessages);
+                    console.log('resulst')
+                    console.log(result)
                     messages.push(result.choices[0].message);
 
                     console.log(messages)
@@ -193,10 +195,10 @@ async function getChatGptAnswerObjectWithFunction(messages, databasesTablesColum
                 } catch (e) {
                     console.log('Error:', e);
                 }
+            } else {
+                messages.push(responseMessage)
+                return messages
             }
-            // else {
-            //     return messages
-            // }
         }
     } catch (e) {
         console.log(e)
