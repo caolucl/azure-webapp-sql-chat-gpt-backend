@@ -58,4 +58,4 @@ jobs:
           app-name: 'azure-sql-chat-gpt-backend'
           slot-name: 'Production'
           package: .
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8A9151D83A8842C4952D4266223EE299 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_1C4A48EA42AB4C5F8483206677C4331F }}
