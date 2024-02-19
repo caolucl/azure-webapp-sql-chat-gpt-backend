@@ -220,6 +220,7 @@ app.post('/allDbsAndSchemas', async (req, res) => {
     }
 
     const userQuery = req.body.userQuery
+    const messages = req.body.messageHistory
     if (!userQuery) {
         console.log('no user query' + Date.now())
         res.status(400).send('No user query')
@@ -285,7 +286,7 @@ app.post('/allDbsAndSchemas', async (req, res) => {
     }
 
     // all available schemas
-    let messageHistory = _.cloneDeep(startMessageStack)
+    let messageHistory = messages
 
     messageHistory.push({
         "role": "system",
