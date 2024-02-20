@@ -106,6 +106,10 @@ let startMessageStack = [
     {
         "role": "system",
         "content": "Answer user questions by generating SQL queries against the provided database schema."
+    },
+    {
+        "role": "user",
+        "content": "How many databases do we have?"
     }
 ]
 
@@ -116,14 +120,14 @@ function createOptions(databaseSchemaString) {
             {
                 "type": "function",
                 "function": {
-                    "name": "ask_database",
+                    "name": "askDatabase",
                     "description": "Use this function to answer user questions about music. Input should be a fully formed SQL query.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": `SQL query extracting info to answer the user's question. SQL should be written using this database schema: ${databaseSchemaString} The query should be returned in plain text, not in JSON.`
+                                "description": `MSSQL query extracting info to answer the user's question. SQL should be written using this database schema: ${databaseSchemaString} The query should be returned in plain text, not in JSON.`
                             }
                         },
                         "required": ["query"],
@@ -134,7 +138,7 @@ function createOptions(databaseSchemaString) {
     }
 }
 
-async function ask_database(query) {
+async function askDatabase(query) {
     // Function to query Azure SQL database with a provided SQL query
     try {
         const results = await sql.query(query);
@@ -148,9 +152,9 @@ async function ask_database(query) {
 
 async function applyToolCall({function: call, id}) {
     // Function to apply a tool call from the OpenAI API
-    if (call.name === "ask_database") {
+    if (call.name === "askDatabase") {
         const {query} = JSON.parse(call.arguments);
-        const databaseResult = await ask_database(query)
+        const databaseResult = await askDatabase(query)
 
         return {
             role: "tool",
@@ -168,8 +172,6 @@ async function getChatGptAnswerObjectWithFunction(messages, databasesTablesColum
         // Extract the generated completion from the OpenAI API response.
         const choice = chatCompletions.choices[0];
         const responseMessage = choice.message;
-        console.log('responseMessage')
-        console.log(responseMessage)
         if (responseMessage?.role === "assistant") {
             const requestedToolCalls = responseMessage?.toolCalls;
             if (requestedToolCalls?.length) {
@@ -213,7 +215,7 @@ app.get('/', (req, res) => {
 });
 
 
-app.post('/allDbsAndSchemas', async (req, res) => {
+app.post('/chat', async (req, res) => {
     if (!sql) {
         res.status(500).send('Something went wrong');
         return
@@ -221,8 +223,7 @@ app.post('/allDbsAndSchemas', async (req, res) => {
 
     const userQuery = req.body.userQuery
     const messages = req.body.messageHistory
-    if (!userQuery) {
-        console.log('no user query' + Date.now())
+    if (!userQuery || !messages) {
         res.status(400).send('No user query')
         return
     }
@@ -232,11 +233,9 @@ app.post('/allDbsAndSchemas', async (req, res) => {
     const sysDatabases = ["master", "tempdb", "model", "msdb"]
 
 
-    // console.log(databaseList)
     let databasesTablesColumns = []
     for (const database of databaseList) {
         if (!sysDatabases.includes(database.name)) {
-            // console.log(database.name)
             const result = await sql
                 .query(`
         USE ${database.name};
@@ -297,13 +296,8 @@ app.post('/allDbsAndSchemas', async (req, res) => {
 
     let getUpdatedMessageHistory;
     try {
-        // console.log('sending updated message history')
-        // console.log(messageHistory)
         getUpdatedMessageHistory = await getChatGptAnswerObjectWithFunction(messageHistory, databasesTablesColumns);
-        console.log('updated')
-        console.log(getUpdatedMessageHistory)
     } catch (e) {
-        console.log(e)
         return res.status(500).json('Something went wrong')
     }
 
