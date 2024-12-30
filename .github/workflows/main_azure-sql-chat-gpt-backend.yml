@@ -52,19 +52,22 @@ jobs:
 
       - name: Unzip artifact for deployment
         run: unzip release.zip
+      - name: list files and folder
+        run: |
+          ls -la
       
-      - name: Login to Azure
-        uses: azure/login@v1
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_40A9913E54484A6FB045E01C3EED4690 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A2ACE57B41F14E1C86323F13422418A4 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_78442F6497B64AACBE946CE3A8C2DFD9 }}
+      #- name: Login to Azure
+      #  uses: azure/login@v1
+      #  with:
+      #    client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_40A9913E54484A6FB045E01C3EED4690 }}
+      #    tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A2ACE57B41F14E1C86323F13422418A4 }}
+      #    subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_78442F6497B64AACBE946CE3A8C2DFD9 }}
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: 'azure-sql-chat-gpt-backend'
-          slot-name: 'Production'
-          package: .
+      #- name: 'Deploy to Azure Web App'
+      #  id: deploy-to-webapp
+      #  uses: azure/webapps-deploy@v2
+      #  with:
+      #    app-name: 'azure-sql-chat-gpt-backend'
+      #    slot-name: 'Production'
+      #    package: .
           
