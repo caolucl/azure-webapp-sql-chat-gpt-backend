@@ -48,12 +48,13 @@ jobs:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4.1.8
         with:
-          name: artifact
+          name: artifact #node-app
 
       - name: Unzip artifact for deployment
         run: unzip release.zip
       - name: list files and folder
         run: |
+          rm -f release.zip
           ls -la
       
       #- name: Login to Azure
